@@ -12,6 +12,9 @@ import numpy as np
 import streamlit as st
 from supabase import create_client, Client 
 from postgrest.exceptions import APIError
+import time
+
+
 load_dotenv()
 
 CREDENTIALS_JSON = os.getenv('CREDENTIALS_JSON')
@@ -34,6 +37,11 @@ model1 = genai.GenerativeModel('gemini-pro')
 model2 = genai.GenerativeModel('gemini-pro-vision')
 
 
+# Function to generate a unique user_id based on the current time
+def generate_unique_user_id():
+    # Use the current time in milliseconds as the user_id
+    user_id = int(time.time() * 1000)
+    return user_id
 
 
 
@@ -196,42 +204,58 @@ class user_interface:
             else:
                 st.error("Invalid username or password.")
 
-            # Link for new users to register
-            if st.session_state.page == 'login':
-                if st.button("Register"):
-                    st.session_state.page = 'register'
+        # This line should be outside the `if login_button:` block
+        if st.button("Register"):
+            st.session_state.page = 'register'
+
 
         # Function to create registration page
     def registration_page(self):
-            st.title("Registration")
-            name = st.text_input("Name", key="name_input")
-            email = st.text_input("Email", key="email_input")
-            username = st.text_input("Username", key="username_input")
-            password = st.text_input("Password", type="password", key="password_input")
-            confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password_input")
-            
-            # Unique key for the Register button
-            register_button = st.button("Register", key="register_button")
+        st.title("Registration")
+        email = st.text_input("Email", key="email_input")
+        username = st.text_input("Username", key="username_input")
+        password = st.text_input("Password", type="password", key="password_input")
+        confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password_input")
+        phone_no = st.text_input("Phone Number", key="phone_input")  # Add phone number input
+        address = st.text_input("Address", key="address_input")  # Add address input
+        
+        # Unique key for the Register button
+        register_button = st.button("Register", key="register_button")
 
-            # Add a "Back to Login" button
-            back_to_login_button = st.button("Back to Login")
+        # Add a "Back to Login" button
+        back_to_login_button = st.button("Back to Login")
 
-            if register_button:
-                if not name or not email or not username or not password or not confirm_password:
-                    st.error("Please fill in all registration details.")
-                elif password != confirm_password:
-                    st.error("Passwords do not match.")
+        if register_button:
+            if not email or not username or not password or not confirm_password or not phone_no or not address:
+                st.error("Please fill in all registration details.")
+            elif password != confirm_password:
+                st.error("Passwords do not match.")
+            else:
+                unique_user_id = generate_unique_user_id()
+                
+                
+                # Attempt to insert user details into the Users table, now including the unique_user_id
+                response = supabase.table("Users").insert({
+                    "user_id": unique_user_id,  # Include the unique user_id
+                    "username": username,
+                    "password": password,  # In real applications, hash the password
+                    "email": email,
+                    "phone_no": phone_no,
+                    "address": address
+                }).execute()
+                
+                if response.error:
+                    st.error("An error occurred during registration. Please try again.")
                 else:
-                    # Save user data to the database (replace with actual database operation)
-                    # Here you would typically save the user's information to your database
                     st.success("Registration successful! You will be redirected to the login page shortly.")
                     # Redirect to login page after successful registration
                     st.session_state.page = 'login'
-            
-            # Redirect back to login page if "Back to Login" button is clicked
-            if back_to_login_button:
-                st.session_state.page = 'login'
+                
 
+        if back_to_login_button:
+            st.session_state.page = 'login'
+
+                    
         # Function to fetch user profile data from backend database
     def fetch_user_profile(self, user_id):
         try:
