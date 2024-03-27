@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_option_menu import option_menu
 import google.generativeai as genai
 from PIL import Image
 from PyPDF2 import PdfReader
@@ -8,10 +9,6 @@ from dotenv import load_dotenv
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
-
-# r={"invoice_name":[],"invoice_number":[],"invoice_number":[],"invoice_date":[],'total_amount':[],'no_of_items':[]}
-
 
 
 
@@ -248,18 +245,28 @@ def main():
             ui.registration_page()
     else:
         with st.sidebar:
-            st.sidebar.title("Menu")
-            if st.sidebar.button("Home"):
+            selected = option_menu(
+                menu_title=None,
+                options=["Home", "Profile", "Invoices", "Upload New Invoice", "Logout"]
+            )
+            
+           
+            
+            
+            # st.sidebar.title("Menu")
+            if selected == "Home":
                 st.session_state.page = 'home'
-            if st.sidebar.button("Profile"):
+            if selected == "Profile":
                 st.session_state.page = 'profile'
-            if st.sidebar.button("Invoices"):
+            if selected == "Invoices":
                 st.session_state.page = 'invoices'
-            if st.sidebar.button("Upload New Invoice"):
+            if selected == "Upload New Invoice":
                 st.session_state.page = 'upload_invoice'
-            if st.sidebar.button("Logout"):
+            if selected == "Logout":
                 st.session_state.logged_in = False
                 st.session_state.page = 'login'
+
+        # st.session_state.sync()  # Add this line to sync session state changes
 
         if st.session_state.page == 'home':
             ui.home_page()
@@ -273,6 +280,7 @@ def main():
         elif st.session_state.page == 'upload_invoice':
             g_model.main_model()
             # ui.upload_invoice_page()
+
 
 # Run the main function
 if __name__ == "__main__":
