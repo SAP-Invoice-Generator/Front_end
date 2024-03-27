@@ -158,30 +158,43 @@ class gemini_model:
                     else:
                         raise  
 ##########################################################################################################
+username = ""
+password = ""
+
 class user_interface:
     def __init__(self):
-        pass
-    def authenticate(self,username, password):
-    # Dummy authentication, replace with actual logic
-        if username == 'user' and password == 'password':
-            return True
-        else:
-            return False
+        self.username = ""
+        self.password = ""
+    def authenticate_and_get_user_id(self, username, password):
+        try:
+            data = supabase.table("Users").select("user_id").eq("username", username).eq("password", password).execute()
+
+            if data.data:
+                # Assuming the first match is the correct one since usernames should be unique
+                user_id = data.data[0]['user_id']
+                return True, user_id  # Return both authentication success and user_id
+            else:
+                return False, None
+        except Exception as e:
+            print(f"An error occurred during authentication: {e}")
+            return False, None
 
         # Function to create login page
     def login_page(self):
-            st.title("Login")
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            login_button = st.button("Login")
+        st.title("Login")
+        self.username = st.text_input("Username")
+        self.password = st.text_input("Password", type="password")
+        login_button = st.button("Login")
 
-            if login_button and not st.session_state.get('logged_in', False):
-                if self.authenticate(username, password):
-                    st.session_state.logged_in = True
-                    st.session_state.page = 'home'  # Redirect to home page after login
-                    st.success("Login successful!")
-                else:
-                    st.error("Invalid username or password.")
+        if login_button:
+            authenticated, user_id = self.authenticate_and_get_user_id(self.username, self.password)
+            if authenticated:
+                st.session_state['logged_in'] = True
+                st.session_state['user_id'] = user_id  # Store the user_id in the session state
+                st.session_state.page = 'home'  # Redirect to home page after login
+                st.success("Login successful!")
+            else:
+                st.error("Invalid username or password.")
 
             # Link for new users to register
             if st.session_state.page == 'login':
@@ -261,8 +274,9 @@ class user_interface:
 
 
         # Function to display profile page
-    def display_profile_page(self,user_id):
+    def display_profile_page(self):
             # Fetch user profile data
+            user_id = st.session_state.user_id 
             user_data = self.fetch_user_profile(user_id)
 
             # Display profile photo
@@ -328,8 +342,7 @@ def main():
             ui.home_page()
         elif st.session_state.page == 'profile':
             st.title('User Profile Page')
-            user_id = 1  # Placeholder for user ID, replace with actual user ID
-            ui.display_profile_page(user_id)
+            ui.display_profile_page()
         elif st.session_state.page == 'invoices':
             ui.invoice_main()
             # st.title("Invoice page")
