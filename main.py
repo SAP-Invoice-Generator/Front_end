@@ -9,6 +9,29 @@ from dotenv import load_dotenv
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import streamlit as st
+from supabase import create_client, Client 
+from postgrest.exceptions import APIError
+load_dotenv()
+
+CREDENTIALS_JSON = os.getenv('CREDENTIALS_JSON')
+SHEET_KEY=os.getenv('SHEET_KEY')
+GEMINI_KEY=os.getenv('GEMINI_KEY')
+SUPABASE_KEY=os.getenv('SUPERBASE_KEY')
+SUPABASE_URL=os.getenv('SUPERBASE_URL')
+
+supabase : Client = create_client(SUPABASE_URL,SUPABASE_KEY)
+
+
+gc = gspread.service_account(filename=CREDENTIALS_JSON)
+sheet = gc.open_by_key(SHEET_KEY)
+worksheet = sheet.sheet1
+
+
+# Ensure the API key is configured
+genai.configure(api_key=GEMINI_KEY)
+model1 = genai.GenerativeModel('gemini-pro')
+model2 = genai.GenerativeModel('gemini-pro-vision')
 
 
 
@@ -17,73 +40,65 @@ import numpy as np
 
 class gemini_model:
     def __init__(self):
-        load_dotenv()
-
-        CREDENTIALS_JSON = os.getenv('CREDENTIALS_JSON')
-        SHEET_KEY = os.getenv('SHEET_KEY')
-        GEMINI_KEY = os.getenv('GEMINI_KEY')
-
-        gc = gspread.service_account(filename=CREDENTIALS_JSON)
-        sheet = gc.open_by_key(SHEET_KEY)
-        self.worksheet = sheet.sheet1  # Make worksheet a class attribute
-
-        # Ensure the API key is configured
-        genai.configure(api_key=GEMINI_KEY)
-        self.model1 = genai.GenerativeModel('gemini-pro')  # Make model1 a class attribute
-        self.model2 = genai.GenerativeModel('gemini-pro-vision')  # Make model2 a class attribute
+       
         self.response_dict = {}  # Make response_dict a class attribute
         self.details = []  # Make details a class attribute
-        
+        self.input_prompt = """
+            You are an expert in understanding invoices.
+            You will receive input images as invoices & text
+            you will have to answer questions based on the input image
+            """
+     
+    # Function to get the response for PDF input
     def get_gemini_response_pdf(self,input_prompt, context):
-            response = self.model1.generate_content([context, input_prompt])
-            return response.text
+        response = model1.generate_content([context, input_prompt])
+        return response.text
 
-        # Function to get the response for image input
+    # Function to get the response for image input
     def get_gemini_response_image(self,input, image, prompt):
-            response = self.model2.generate_content([input, image[0], prompt])
-            return response.text
+        response = model2.generate_content([input, image[0], prompt])
+        return response.text
 
-        # Function to extract text from PDF
+    # Function to extract text from PDF
     def get_pdf_text(self,pdf_docs):
-            text = ""
-            for pdf in pdf_docs:
-                pdf_reader = PdfReader(pdf)
-                for page in pdf_reader.pages:
-                    text += page.extract_text()
-            return text
+        text = ""
+        for pdf in pdf_docs:
+            pdf_reader = PdfReader(pdf)
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+        return text
 
-        # Function to set up image data for processing
+    # Function to set up image data for processing
     def input_image_setup(self,uploaded_file):
-            if uploaded_file is not None:
-                bytes_data = uploaded_file.getvalue()
-                image_parts = [{"mime_type": uploaded_file.type, "data": bytes_data}]
-                return image_parts
-            else:
-                raise FileNotFoundError("No file uploaded")
+        if uploaded_file is not None:
+            bytes_data = uploaded_file.getvalue()
+            image_parts = [{"mime_type": uploaded_file.type, "data": bytes_data}]
+            return image_parts
+        else:
+            raise FileNotFoundError("No file uploaded")
 
 
-    input_prompt = """
-                    You are an expert in understanding invoices.
-                    You will receive input images as invoices & text
-                    you will have to answer questions based on the input image
-                    """
-    
+
+
     def main_model(self):
-        st.header("Upload your Invoice")
 
-        input = '''give me the details of the invoice like invoice name, invoice number,invoice company, date, total amount, no of items, 
+
+        input = '''give me the details of the invoice like invoice name, invoice number as a integer,invoice company, date, total amount as a integer , no of items as a integer, 
         i need only these fields do not give me any extra details ok?  
         if any field is not available, return them as NULL,
-        i need all details as a python dictionary  '''
+        i need all detials as a python dictionary  '''
+
+        # Dynamic rows to store details
+        details = []
 
         uploaded_file = st.file_uploader("Upload an image or PDF...", type=["jpg", "jpeg", "png", "pdf"])
-        submit = st.button("Upload")
+        submit = st.button("Tell me about it")
 
         if uploaded_file is not None:
             if uploaded_file.type.startswith('image/'):
                 image = Image.open(uploaded_file)
                 st.image(image, caption="Uploaded Image.", use_column_width=True)
-                image_data = self.input_image_setup(uploaded_file)
+                image_data = self.input_image_setup(uploaded_file)  
                 response = self.get_gemini_response_image(self.input_prompt, image_data, input)
             elif uploaded_file.type == 'application/pdf':
                 st.write("Uploaded PDF:", uploaded_file.name)
@@ -97,39 +112,52 @@ class gemini_model:
                 details = []
                 st.subheader("The Response is")
                 response = response.replace("python","")
-                # print(response)
+                print(response)
 
                 respons_lst = response.split("\n")
                 # for x in response:
                 #     respons_lst.append(x)
-                # print(respons_lst)
+                print(respons_lst)
                 for i in respons_lst[:-1]:
                     if i not in ['{','}',"'","```"]:
                         details.append(i)
                 details.pop(0)
                 details = [str(x) for x in details]
                 st.write(response)
-                # print(details)
+                print(details)
                 response_dict = {}
                 for x in details:
                     key,val = x.split(':',1)
                     key = key.strip().strip('"')
                     key=key.replace(":","")
                     val=val.replace(",","")
-                    # print(key," corresponding value is ",val)
+                    print(key," corresponding value is ",val)
                     response_dict[key] = val
+                
                 values = []
                 for key, value in response_dict.items():
                     value = value.replace('"', "")
                     st.text_input(key, value)
                     values.append(value)
-                self.worksheet.append_row(values)
-            
-            
-            
-                
-
-
+                worksheet.append_row(values)
+                    
+                print(response_dict)
+                try:
+                    supabase.table("Invoices").insert({
+                        "invoice_id": int(response_dict['invoice_number']), 
+                        "invoice_name": response_dict['invoice_name'],
+                        # "date":response_dict['date'], 
+                        "invoice_company":response_dict['invoice_company'],
+                        "invoice_no": int(response_dict['invoice_number']),   
+                        "total_amount":int(response_dict['total_amount']),  
+                        "no_of_items":int(response_dict['no_of_items'])
+                    }).execute()
+                except APIError as e:
+                    if '23505' in str(e): 
+                        st.error('This invoice has already been uploaded.')
+                    else:
+                        raise  
+##########################################################################################################
 class user_interface:
     def __init__(self):
         pass
@@ -278,6 +306,7 @@ def main():
             ui.invoice_main()
             # st.title("Invoice page")
         elif st.session_state.page == 'upload_invoice':
+            st.header("Upload Your Invoice")
             g_model.main_model()
             # ui.upload_invoice_page()
 
