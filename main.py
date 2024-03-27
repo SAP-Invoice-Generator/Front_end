@@ -220,17 +220,45 @@ class user_interface:
                 st.session_state.page = 'login'
 
         # Function to fetch user profile data from backend database
-    def fetch_user_profile(self,user_id):
-            # Dummy data, replace with actual database query
-            user_data = {
-                'name': 'John Doe',
-                'email': 'john@example.com',
-                'phone_number': '+1234567890',
-                'username': 'johndoe',
-                'address': '123 Main St, City, Country',
-                'profile_photo_url': 'https://picsum.photos/200/300?random=1'  # URL to profile photo
+    def fetch_user_profile(self, user_id):
+        try:
+            data = supabase.table("Users").select("*").eq("user_id", user_id).execute()
+
+            # Check if data was found
+            if data.data:
+                user_data = data.data[0]  # Assuming user_id is unique, hence taking the first match
+                # Format the user data dictionary
+                formatted_user_data = {
+                    'name': user_data['username'],  # Assuming you want to use username as name
+                    'email': user_data['email'],
+                    'phone_number': user_data['phone_no'],
+                    'username': user_data['username'],
+                    'address': user_data['address'],
+                    # Provide a default or specific URL for the profile photo if it's not stored in the database
+                    'profile_photo_url': 'https://picsum.photos/200/300?random=1'
+                }
+                return formatted_user_data
+            else:
+                # Handle case where no user is found
+                return {
+                    'name': 'User not found',
+                    'email': '',
+                    'phone_number': '',
+                    'username': '',
+                    'address': '',
+                    'profile_photo_url': 'https://picsum.photos/200/300?random=2'  # URL to a default profile photo
+                }
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return {
+                'name': 'Error fetching profile',
+                'email': '',
+                'phone_number': '',
+                'username': '',
+                'address': '',
+                'profile_photo_url': 'https://picsum.photos/200/300?random=3'  # URL to an error profile photo
             }
-            return user_data
+
 
         # Function to display profile page
     def display_profile_page(self,user_id):
