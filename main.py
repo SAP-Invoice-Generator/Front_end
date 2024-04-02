@@ -14,7 +14,6 @@ from supabase import create_client, Client
 from postgrest.exceptions import APIError
 import time
 
-
 load_dotenv()
 
 CREDENTIALS_JSON = os.getenv('CREDENTIALS_JSON')
@@ -25,17 +24,14 @@ SUPABASE_URL=os.getenv('SUPERBASE_URL')
 
 supabase : Client = create_client(SUPABASE_URL,SUPABASE_KEY)
 
-
 gc = gspread.service_account(filename=CREDENTIALS_JSON)
 sheet = gc.open_by_key(SHEET_KEY)
 worksheet = sheet.sheet1
-
 
 # Ensure the API key is configured
 genai.configure(api_key=GEMINI_KEY)
 model1 = genai.GenerativeModel('gemini-pro')
 model2 = genai.GenerativeModel('gemini-pro-vision')
-
 
 # Function to generate a unique user_id based on the current time
 def generate_unique_user_id():
@@ -43,12 +39,8 @@ def generate_unique_user_id():
     user_id = int(time.time() * 1000)
     return user_id
 
-
-
-
 class gemini_model:
     def __init__(self):
-       
         self.response_dict = {}  # Make response_dict a class attribute
         self.details = []  # Make details a class attribute
         self.input_prompt = """
@@ -56,7 +48,7 @@ class gemini_model:
             You will receive input images as invoices & text
             you will have to answer questions based on the input image
             """
-     
+
     # Function to get the response for PDF input
     def get_gemini_response_pdf(self,input_prompt, context):
         response = model1.generate_content([context, input_prompt])
@@ -85,22 +77,13 @@ class gemini_model:
         else:
             raise FileNotFoundError("No file uploaded")
 
-
-
-
     def main_model(self):
-
-
-        input = '''give me the details of the invoice like invoice name, invoice number as a integer,invoice company, date, total amount as a integer , no of items as a integer, 
-        i need only these fields do not give me any extra details ok?  
+        input = '''give me the details of the invoice like invoice name, invoice number as a integer, invoice company, date, total amount as a integer, no of items as a integer,
+        i need only these fields do not give me any extra details ok?
         if any field is not available, return them as NULL,
         i need all detials as a python dictionary  '''
 
-        # Dynamic rows to store details
-        details = []
-
         uploaded_file = st.file_uploader("Upload an image or PDF...", type=["jpg", "jpeg", "png", "pdf"])
-        submit = st.button("Tell me about it")
 
         if uploaded_file is not None:
             if uploaded_file.type.startswith('image/'):
@@ -116,63 +99,64 @@ class gemini_model:
             else:
                 raise ValueError("Unsupported file type.")
 
-            if submit:
-                details = []
-                st.subheader("The Response is")
-                response = response.replace("python","")
-                print(response)
+            st.subheader("The Response is")
+            response = response.replace("python", "")
+            details = self.extract_invoice_details(response)
+            self.display_invoice_fields(details)
 
-                respons_lst = response.split("\n")
-                # for x in response:
-                #     respons_lst.append(x)
-                print(respons_lst)
-                for i in respons_lst[:-1]:
-                    if i not in ['{','}',"'","```"]:
-                        details.append(i)
-                details.pop(0)
-                details = [str(x) for x in details]
-                st.write(response)
-                print(details)
-                response_dict = {}
-                for x in details:
-                    key,val = x.split(':',1)
-                    key = key.strip().strip('"')
-                    key=key.replace(":","")
-                    val=val.replace(",","")
-                    print(key," corresponding value is ",val)
-                    response_dict[key] = val
-                
-                values = []
-                for key, value in response_dict.items():
-                    value = value.replace('"', "")
-                    st.text_input(key, value)
-                    values.append(value)
-                worksheet.append_row(values)
-                    
-                print(response_dict)
-                try:
-                    supabase.table("Invoices").insert({
-                        "invoice_id": int(response_dict['invoice_number']), 
-                        "invoice_name": response_dict['invoice_name'],
-                        # "date":response_dict['date'], 
-                        "invoice_company":response_dict['invoice_company'],
-                        "invoice_no": int(response_dict['invoice_number']),   
-                        "total_amount":int(response_dict['total_amount']),  
-                        "no_of_items":int(response_dict['no_of_items'])
-                    }).execute()
-                except APIError as e:
-                    if '23505' in str(e): 
-                        st.error('This invoice has already been uploaded.')
-                    else:
-                        raise  
-##########################################################################################################
-username = ""
-password = ""
+            if st.button("Submit"):
+                self.upload_to_database(details)
+                st.write("Successfully uploaded")
+
+    def extract_invoice_details(self, response):
+        details = []
+        respons_lst = response.split("\n")
+        for i in respons_lst[:-1]:
+            if i not in ['{', '}', "'", "```"]:
+                details.append(i)
+        details.pop(0)
+        details = [str(x) for x in details]
+        response_dict = {}
+        for x in details:
+            key, val = x.split(':', 1)
+            key = key.strip().strip('"')
+            key = key.replace(":", "")
+            val = val.replace(",", "").strip()  # Strip any whitespace
+            response_dict[key] = val
+        return response_dict
+
+    def display_invoice_fields(self, details):
+        st.write(details)
+        for key, value in details.items():
+            details[key] = st.text_input(key, value)
+
+    def upload_to_database(self, details):
+        values = [value.replace('"', '') for value in details.values()]
+        worksheet.append_row(values)
+        try:
+            supabase.table("Invoices").insert({
+                "invoice_id": details['invoice_number'],
+                "invoice_name": details['invoice_name'],
+                "invoice_company": details['invoice_company'],
+                "invoice_no": details['invoice_number'],
+                "total_amount": int(details['total_amount']),
+                "no_of_items": int(details['no_of_items'])
+            }).execute()
+        except APIError as e:
+            if '23505' in str(e):
+                st.error('This invoice has already been uploaded.')
+            if '22003' in str(e):
+                st.error('Please ensure that the total amount and no of items are integers.')
+            if '22P02' in str(e):
+                st.error('Please ensure that the invoice number is an integer if no invoice number, enter 0.')
+            else:
+                raise
 
 class user_interface:
     def __init__(self):
         self.username = ""
         self.password = ""
+
     def authenticate_and_get_user_id(self, username, password):
         try:
             data = supabase.table("Users").select("user_id").eq("username", username).eq("password", password).execute()
@@ -187,7 +171,6 @@ class user_interface:
             print(f"An error occurred during authentication: {e}")
             return False, None
 
-        # Function to create login page
     def login_page(self):
         st.title("Login")
         self.username = st.text_input("Username")
@@ -204,25 +187,19 @@ class user_interface:
             else:
                 st.error("Invalid username or password.")
 
-        # This line should be outside the `if login_button:` block
         if st.button("Register"):
             st.session_state.page = 'register'
 
-
-        # Function to create registration page
     def registration_page(self):
         st.title("Registration")
         email = st.text_input("Email", key="email_input")
         username = st.text_input("Username", key="username_input")
         password = st.text_input("Password", type="password", key="password_input")
         confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password_input")
-        phone_no = st.text_input("Phone Number", key="phone_input")  # Add phone number input
-        address = st.text_input("Address", key="address_input")  # Add address input
+        phone_no = st.text_input("Phone Number", key="phone_input")
+        address = st.text_input("Address", key="address_input")
         
-        # Unique key for the Register button
         register_button = st.button("Register", key="register_button")
-
-        # Add a "Back to Login" button
         back_to_login_button = st.button("Back to Login")
 
         if register_button:
@@ -232,13 +209,10 @@ class user_interface:
                 st.error("Passwords do not match.")
             else:
                 unique_user_id = generate_unique_user_id()
-                
-                
-                # Attempt to insert user details into the Users table, now including the unique_user_id
                 response = supabase.table("Users").insert({
-                    "user_id": unique_user_id,  # Include the unique user_id
+                    "user_id": unique_user_id,
                     "username": username,
-                    "password": password,  # In real applications, hash the password
+                    "password": password,
                     "email": email,
                     "phone_no": phone_no,
                     "address": address
@@ -248,42 +222,34 @@ class user_interface:
                     st.error("An error occurred during registration. Please try again.")
                 else:
                     st.success("Registration successful! You will be redirected to the login page shortly.")
-                    # Redirect to login page after successful registration
                     st.session_state.page = 'login'
-                
 
         if back_to_login_button:
             st.session_state.page = 'login'
 
-                    
-        # Function to fetch user profile data from backend database
     def fetch_user_profile(self, user_id):
         try:
             data = supabase.table("Users").select("*").eq("user_id", user_id).execute()
 
-            # Check if data was found
             if data.data:
-                user_data = data.data[0]  # Assuming user_id is unique, hence taking the first match
-                # Format the user data dictionary
+                user_data = data.data[0]
                 formatted_user_data = {
-                    'name': user_data['username'],  # Assuming you want to use username as name
+                    'name': user_data['username'],
                     'email': user_data['email'],
                     'phone_number': user_data['phone_no'],
                     'username': user_data['username'],
                     'address': user_data['address'],
-                    # Provide a default or specific URL for the profile photo if it's not stored in the database
                     'profile_photo_url': 'https://picsum.photos/200/300?random=1'
                 }
                 return formatted_user_data
             else:
-                # Handle case where no user is found
                 return {
                     'name': 'User not found',
                     'email': '',
                     'phone_number': '',
                     'username': '',
                     'address': '',
-                    'profile_photo_url': 'https://picsum.photos/200/300?random=2'  # URL to a default profile photo
+                    'profile_photo_url': 'https://picsum.photos/200/300?random=2'
                 }
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -293,39 +259,70 @@ class user_interface:
                 'phone_number': '',
                 'username': '',
                 'address': '',
-                'profile_photo_url': 'https://picsum.photos/200/300?random=3'  # URL to an error profile photo
+                'profile_photo_url': 'https://picsum.photos/200/300?random=3'
             }
 
-
-        # Function to display profile page
     def display_profile_page(self):
-            # Fetch user profile data
-            user_id = st.session_state.user_id 
-            user_data = self.fetch_user_profile(user_id)
+        user_id = st.session_state.user_id 
+        user_data = self.fetch_user_profile(user_id)
 
-            # Display profile photo
-            st.image(user_data['profile_photo_url'], caption='Profile Photo', width=100)
+        st.image(user_data['profile_photo_url'], caption='Profile Photo', width=100)
 
-            # Display user information
-            st.subheader('User Information')
-            st.write(f"**Name:** {user_data['name']}")
-            st.write(f"**Email:** {user_data['email']}")
-            st.write(f"**Phone Number:** {user_data['phone_number']}")
-            st.write(f"**Username:** {user_data['username']}")
-            st.write(f"**Address:** {user_data['address']}")
+        st.subheader('User Information')
+        st.write(f"**Name:** {user_data['name']}")
+        st.write(f"**Email:** {user_data['email']}")
+        st.write(f"**Phone Number:** {user_data['phone_number']}")
+        st.write(f"**Username:** {user_data['username']}")
+        st.write(f"**Address:** {user_data['address']}")
+
     def home_page(self):
         st.title("Welcome to Invoice Management Tool")
 
     def invoice_main(self):
-        st.title("Invoice pages")
+        st.title("Invoice Pages")
 
-# Main function to run the Streamlit app
-# Main function to run the Streamlit app
+        # Fetch user_id from session state
+        user_id = st.session_state.user_id 
+
+        # Fetch all invoices from the 'Invoices' table based on the user_id
+        invoices = supabase.table("Invoices").select("*").eq("user_id", user_id).execute().data
+
+        # Filter options
+        filter_options = ["No Filter", "No of Items Less Than", "No of Items Greater Than", "Total Amount Less Than", "Total Amount Greater Than"]
+        selected_filter = st.selectbox("Filter By", filter_options)
+
+        # If user selects a filter option
+        if selected_filter != "No Filter":
+            # Get filter input from user
+            filter_input = st.number_input(f"Enter Value to Filter {selected_filter}", min_value=0)
+
+            # Filter invoices based on selected option
+            if selected_filter == "No of Items Less Than":
+                invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) < filter_input]
+            elif selected_filter == "No of Items Greater Than":
+                invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) > filter_input]
+            elif selected_filter == "Total Amount Less Than":
+                invoices = [invoice for invoice in invoices if int(invoice['total_amount']) < filter_input]
+            elif selected_filter == "Total Amount Greater Than":
+                invoices = [invoice for invoice in invoices if int(invoice['total_amount']) > filter_input]
+
+        # Display filtered invoices
+        st.write("Filtered Invoices:")
+        for invoice in invoices:
+            st.write("Invoice ID:", invoice['invoice_id'])
+            st.write("Invoice Name:", invoice['invoice_name'])
+            st.write("Invoice Company:", invoice['invoice_company'])
+            st.write("Invoice Number:", invoice['invoice_no'])
+            st.write("Total Amount:", invoice['total_amount'])
+            st.write("No of Items:", invoice['no_of_items'])
+            st.write("---------------")
+
+
 def main():
     st.set_page_config(page_title="Gemini Demo")
     ui = user_interface()
     g_model = gemini_model()
-    # Initialize session state
+
     if 'page' not in st.session_state:
         st.session_state.page = 'login'
 
@@ -343,11 +340,7 @@ def main():
                 menu_title=None,
                 options=["Home", "Profile", "Invoices", "Upload New Invoice", "Logout"]
             )
-            
-           
-            
-            
-            # st.sidebar.title("Menu")
+
             if selected == "Home":
                 st.session_state.page = 'home'
             if selected == "Profile":
@@ -360,8 +353,6 @@ def main():
                 st.session_state.logged_in = False
                 st.session_state.page = 'login'
 
-        # st.session_state.sync()  # Add this line to sync session state changes
-
         if st.session_state.page == 'home':
             ui.home_page()
         elif st.session_state.page == 'profile':
@@ -369,14 +360,9 @@ def main():
             ui.display_profile_page()
         elif st.session_state.page == 'invoices':
             ui.invoice_main()
-            # st.title("Invoice page")
         elif st.session_state.page == 'upload_invoice':
             st.header("Upload Your Invoice")
             g_model.main_model()
-            # ui.upload_invoice_page()
 
-
-# Run the main function
 if __name__ == "__main__":
     main()
-
