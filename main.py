@@ -150,7 +150,7 @@ class gemini_model:
             if '22P02' in str(e):
                 st.error('Please ensure that the invoice number is an integer if no invoice number, enter 0.')
             else:
-                raise
+                st.error(f"An unexpected error occurred: {str(e)}")
 
 class user_interface:
     def __init__(self):
