@@ -127,8 +127,12 @@ class gemini_model:
 
     def display_invoice_fields(self, details):
         st.write(details)
-        for key, value in details.items():
-            details[key] = st.text_input(key, value)
+        empty_dict={"invoice_name": "", "invoice_number": "", "invoice_company": "", "date": "", "total_amount": "", "no_of_items": ""}
+        for key, value in empty_dict.items():
+            if details.get(key) is not None:
+                empty_dict[key] = st.text_input(key, value=details[key])
+            else:
+                empty_dict[key] = st.text_input(key, value="None")
 
     def upload_to_database(self, details):
         values = [value.replace('"', '') for value in details.values()]
