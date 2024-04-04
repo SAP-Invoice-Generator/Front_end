@@ -18,7 +18,7 @@ load_dotenv()
 
 CREDENTIALS_JSON = os.getenv('CREDENTIALS_JSON')
 SHEET_KEY=os.getenv('SHEET_KEY')
-GEMINI_KEY=os.getenv('GEMINI_KEY')
+GEMINI_KEY=os.getenv('GEMINI_KEY')  
 SUPABASE_KEY=os.getenv('SUPERBASE_KEY')
 SUPABASE_URL=os.getenv('SUPERBASE_URL')
 
@@ -139,12 +139,14 @@ class gemini_model:
         worksheet.append_row(values)
         try:
             supabase.table("Invoices").insert({
+                "user_id": st.session_state.user_id,
                 "invoice_id": details['invoice_number'],
                 "invoice_name": details['invoice_name'],
                 "invoice_company": details['invoice_company'],
                 "invoice_no": details['invoice_number'],
                 "total_amount": int(details['total_amount']),
-                "no_of_items": int(details['no_of_items'])
+                "no_of_items": int(details['no_of_items']),
+                "invoices_user_id": str(st.session_state.user_id) + "_" + str(details['invoice_number'])
             }).execute()
         except APIError as e:
             if '23505' in str(e):
@@ -222,11 +224,9 @@ class user_interface:
                     "address": address
                 }).execute()
                 
-                if response.error:
-                    st.error("An error occurred during registration. Please try again.")
-                else:
-                    st.success("Registration successful! You will be redirected to the login page shortly.")
-                    st.session_state.page = 'login'
+
+                st.success("Registration successful! You will be redirected to the login page shortly.")
+                st.session_state.page = 'login'
 
         if back_to_login_button:
             st.session_state.page = 'login'
