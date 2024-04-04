@@ -130,7 +130,11 @@ class gemini_model:
             key = key.replace(":", "")
             val = val.replace(",", "").strip()  # Strip any whitespace
             response_dict[key] = val
+        # Ensure 'invoice_date' key exists, otherwise set it to today's date
+        if 'invoice_date' not in response_dict:
+            response_dict['invoice_date'] = date.today().strftime("%Y-%m-%d")
         return response_dict
+
 
     def display_invoice_fields(self, details):
         fake = Faker()
