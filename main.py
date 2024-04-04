@@ -13,6 +13,10 @@ import streamlit as st
 from supabase import create_client, Client 
 from postgrest.exceptions import APIError
 import time
+from faker import Faker
+import random
+from datetime import date
+
 
 load_dotenv()
 
@@ -102,10 +106,10 @@ class gemini_model:
             st.subheader("The Response is")
             response = response.replace("python", "")
             details = self.extract_invoice_details(response)
-            self.display_invoice_fields(details)
+            empty_dict=self.display_invoice_fields(details)
 
             if st.button("Submit"):
-                self.upload_to_database(details)
+                self.upload_to_database(empty_dict)
                 st.write("Successfully uploaded")
 
     def extract_invoice_details(self, response):
@@ -126,26 +130,29 @@ class gemini_model:
         return response_dict
 
     def display_invoice_fields(self, details):
+        fake = Faker()
+
         st.write(details)
-        empty_dict={"invoice_name": "", "invoice_number": "", "invoice_company": "", "date": "", "total_amount": "", "no_of_items": ""}
+        empty_dict={"invoice_name": fake.name(), "invoice_number": random.randint(1000000,9999999), "invoice_company": fake.company(), "invoice_date": date.today().strftime("%Y-%m-%d"), "total_amount": 1, "no_of_items": 1}
         for key, value in empty_dict.items():
             if details.get(key) is not None:
                 empty_dict[key] = st.text_input(key, value=details[key])
             else:
-                empty_dict[key] = st.text_input(key, value="None")
+                empty_dict[key] = st.text_input(key, value=empty_dict[key])
+        return empty_dict 
 
     def upload_to_database(self, details):
         values = [value.replace('"', '') for value in details.values()]
         worksheet.append_row(values)
         try:
             supabase.table("Invoices").insert({
-                "invoice_date": details['date'],
+                "invoice_date": details['invoice_date'],
                 "user_id": st.session_state.user_id,
                 "invoice_id": details['invoice_number'],
                 "invoice_name": details['invoice_name'],
                 "invoice_company": details['invoice_company'],
                 "invoice_no": details['invoice_number'],
-                "total_amount": int(details['total_amount']),
+                "total_amount": float(details['total_amount']),
                 "no_of_items": int(details['no_of_items']),
                 "invoices_user_id": str(st.session_state.user_id) + "_" + str(details['invoice_number'])
             }).execute()
@@ -156,8 +163,7 @@ class gemini_model:
                 st.error('Please ensure that the total amount and no of items are integers.')
             if '22P02' in str(e):
                 st.error('Please ensure that the invoice number is an integer if no invoice number, enter 0.')
-            else:
-                st.error(f"An unexpected error occurred: {str(e)}")
+
 
 class user_interface:
     def __init__(self):
