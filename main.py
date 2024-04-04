@@ -13,6 +13,9 @@ import streamlit as st
 from supabase import create_client, Client 
 from postgrest.exceptions import APIError
 import time
+from io import BytesIO
+import calendar
+from faker import Faker
 
 load_dotenv()
 
@@ -32,6 +35,8 @@ worksheet = sheet.sheet1
 genai.configure(api_key=GEMINI_KEY)
 model1 = genai.GenerativeModel('gemini-pro')
 model2 = genai.GenerativeModel('gemini-pro-vision')
+
+
 
 # Function to generate a unique user_id based on the current time
 def generate_unique_user_id():
@@ -243,7 +248,7 @@ class user_interface:
                     'phone_number': user_data['phone_no'],
                     'username': user_data['username'],
                     'address': user_data['address'],
-                    'profile_photo_url': 'https://picsum.photos/200/300?random=1'
+                    # 'profile_photo_url': 'https://picsum.photos/200/300?random=1'
                 }
                 return formatted_user_data
             else:
@@ -253,7 +258,7 @@ class user_interface:
                     'phone_number': '',
                     'username': '',
                     'address': '',
-                    'profile_photo_url': 'https://picsum.photos/200/300?random=2'
+                    # 'profile_photo_url': 'https://picsum.photos/200/300?random=2'
                 }
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -263,14 +268,14 @@ class user_interface:
                 'phone_number': '',
                 'username': '',
                 'address': '',
-                'profile_photo_url': 'https://picsum.photos/200/300?random=3'
+                # 'profile_photo_url': 'https://picsum.photos/200/300?random=3'
             }
 
     def display_profile_page(self):
         user_id = st.session_state.user_id 
         user_data = self.fetch_user_profile(user_id)
 
-        st.image(user_data['profile_photo_url'], caption='Profile Photo', width=100)
+        # st.image(user_data['profile_photo_url'], caption='Profile Photo', width=100)
 
         st.subheader('User Information')
         st.write(f"**Name:** {user_data['name']}")
@@ -281,7 +286,78 @@ class user_interface:
 
     def home_page(self):
         st.title("Welcome to Invoice Management Tool")
+        st.write("Efficiently manage your invoices with our user-friendly and intuitive platform. Say goodbye to the hassle of manual invoicing and embrace the simplicity of our streamlined solution.")
 
+    def extract_date_and_amount(self, data):
+        date_list = []
+        for d in data:
+            if d.get('invoice_date') is not None:  # Check if invoice_date is not null
+                date_list.append({'invoice_date': pd.to_datetime(d['invoice_date']), 'total_amount': d['total_amount']})
+        return pd.DataFrame(date_list)
+
+    def invoice_plot(self):
+        # Streamlit app
+        st.title('Invoice Analysis')
+        user_id = st.session_state.user_id 
+        invoices = supabase.table("Invoices").select("*").eq("user_id", user_id).execute().data
+        if len(invoices)==0:
+            st.write("No Invoice available for Analytics")
+        else:
+            # Convert list of dictionaries to DataFrame
+            df = self.extract_date_and_amount(invoices)
+
+            if df.empty:
+                st.warning('No valid data available.')
+                return
+
+            # Plot month vs amount for each year
+            years = sorted(df['invoice_date'].dt.year.unique())
+            for year in years:
+                st.subheader(f'Month vs Amount for {year}')
+                filtered_data = df[df['invoice_date'].dt.year == year]
+
+                # Plotting
+                fig, ax = plt.subplots(figsize=(10, 6))
+                # Plot using month names as x-axis labels
+                months = range(1, 13)
+                month_names = [calendar.month_name[i] for i in months]
+                ax.bar(filtered_data['invoice_date'].dt.month, filtered_data['total_amount'])
+                ax.set_xticks(months)
+                ax.set_xticklabels(month_names, rotation=90)  # Set month names as x-axis labels vertically
+                ax.set_xlabel('Month')
+                ax.set_ylabel('Amount')
+                ax.set_title(f'Month vs Amount for {year}')
+                st.pyplot(fig)
+                self.download_plot_button(fig, f'Month_vs_Amount_{year}.png')
+
+            # Plot year vs total amount
+            st.subheader('Year vs Total Amount')
+            year_total_amount = df.groupby(df['invoice_date'].dt.year)['total_amount'].sum()
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(year_total_amount.index, year_total_amount.values, marker='o')
+            ax.set_xlabel('Year')
+            ax.set_ylabel('Total Amount')
+            ax.set_title('Year vs Total Amount')
+            st.pyplot(fig)
+            self.download_plot_button(fig, 'Year_vs_Total_Amount.png')
+
+    def download_plot_button(self, fig, filename):
+        img_data = BytesIO()
+        fig.savefig(img_data, format='png')
+        img_data.seek(0)
+        st.download_button(label='Download Plot', data=img_data, file_name=filename, mime='image/png')
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     def invoice_main(self):
         st.title("Invoice Pages")
 
@@ -290,36 +366,40 @@ class user_interface:
 
         # Fetch all invoices from the 'Invoices' table based on the user_id
         invoices = supabase.table("Invoices").select("*").eq("user_id", user_id).execute().data
+        
+        if len(invoices)==0:
+            st.write("No Invoices Found")
+        else:
+            # Filter options
+            filter_options = ["No Filter", "No of Items Less Than", "No of Items Greater Than", "Total Amount Less Than", "Total Amount Greater Than"]
+            selected_filter = st.selectbox("Filter By", filter_options)
 
-        # Filter options
-        filter_options = ["No Filter", "No of Items Less Than", "No of Items Greater Than", "Total Amount Less Than", "Total Amount Greater Than"]
-        selected_filter = st.selectbox("Filter By", filter_options)
+            # If user selects a filter option
+            if selected_filter != "No Filter":
+                # Get filter input from user
+                filter_input = st.number_input(f"Enter Value to Filter {selected_filter}", min_value=0)
 
-        # If user selects a filter option
-        if selected_filter != "No Filter":
-            # Get filter input from user
-            filter_input = st.number_input(f"Enter Value to Filter {selected_filter}", min_value=0)
+                # Filter invoices based on selected option
+                if selected_filter == "No of Items Less Than":
+                    invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) < filter_input]
+                elif selected_filter == "No of Items Greater Than":
+                    invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) > filter_input]
+                elif selected_filter == "Total Amount Less Than":
+                    invoices = [invoice for invoice in invoices if int(invoice['total_amount']) < filter_input]
+                elif selected_filter == "Total Amount Greater Than":
+                    invoices = [invoice for invoice in invoices if int(invoice['total_amount']) > filter_input]
 
-            # Filter invoices based on selected option
-            if selected_filter == "No of Items Less Than":
-                invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) < filter_input]
-            elif selected_filter == "No of Items Greater Than":
-                invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) > filter_input]
-            elif selected_filter == "Total Amount Less Than":
-                invoices = [invoice for invoice in invoices if int(invoice['total_amount']) < filter_input]
-            elif selected_filter == "Total Amount Greater Than":
-                invoices = [invoice for invoice in invoices if int(invoice['total_amount']) > filter_input]
-
-        # Display filtered invoices
-        st.write("Filtered Invoices:")
-        for invoice in invoices:
-            st.write("Invoice ID:", invoice['invoice_id'])
-            st.write("Invoice Name:", invoice['invoice_name'])
-            st.write("Invoice Company:", invoice['invoice_company'])
-            st.write("Invoice Number:", invoice['invoice_no'])
-            st.write("Total Amount:", invoice['total_amount'])
-            st.write("No of Items:", invoice['no_of_items'])
-            st.write("---------------")
+            # Display filtered invoices
+            st.write("Filtered Invoices:")
+            for invoice in invoices:
+                st.write("Invoice ID:", invoice['invoice_id'])
+                st.write("Invoice Name:", invoice['invoice_name'])
+                st.write("Invoice Company:", invoice['invoice_company'])
+                st.write("Invoice Number:", invoice['invoice_no'])
+                st.write("Total Amount:", invoice['total_amount'])
+                st.write("No of Items:", invoice['no_of_items'])
+                st.write("Date:",invoice.get('invoice_date' ,''))
+                st.write("---------------")
 
 
 def main():
@@ -342,7 +422,7 @@ def main():
         with st.sidebar:
             selected = option_menu(
                 menu_title=None,
-                options=["Home", "Profile", "Invoices", "Upload New Invoice", "Logout"]
+                options=["Home", "Profile", "Invoices","Analytics","Upload New Invoice", "Logout"]
             )
 
             if selected == "Home":
@@ -353,6 +433,8 @@ def main():
                 st.session_state.page = 'invoices'
             if selected == "Upload New Invoice":
                 st.session_state.page = 'upload_invoice'
+            if selected=="Analytics":
+                st.session_state.page = 'analytics'
             if selected == "Logout":
                 st.session_state.logged_in = False
                 st.session_state.page = 'login'
@@ -364,6 +446,9 @@ def main():
             ui.display_profile_page()
         elif st.session_state.page == 'invoices':
             ui.invoice_main()
+        elif st.session_state.page=='analytics':
+            ui.invoice_plot()
+            
         elif st.session_state.page == 'upload_invoice':
             st.header("Upload Your Invoice")
             g_model.main_model()
