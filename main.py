@@ -1,3 +1,4 @@
+
 import streamlit as st
 from streamlit_option_menu import option_menu
 import google.generativeai as genai
@@ -9,13 +10,14 @@ from dotenv import load_dotenv
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import streamlit as st
+from io import BytesIO
 from supabase import create_client, Client 
 from postgrest.exceptions import APIError
 import time
-from io import BytesIO
-import calendar
 from faker import Faker
+import random
+from datetime import date
+import calendar
 
 load_dotenv()
 
@@ -131,25 +133,31 @@ class gemini_model:
         return response_dict
 
     def display_invoice_fields(self, details):
+        fake = Faker()
+
         st.write(details)
-        empty_dict={"invoice_name": "", "invoice_number": "", "invoice_company": "", "date": "", "total_amount": "", "no_of_items": ""}
+        empty_dict={"invoice_name": fake.name(), "invoice_number": random.randint(1000000,9999999), "invoice_company": fake.company(), "invoice_date": date.today().strftime("%Y-%m-%d"), "total_amount": 1, "no_of_items": 1}
         for key, value in empty_dict.items():
             if details.get(key) is not None:
                 empty_dict[key] = st.text_input(key, value=details[key])
             else:
-                empty_dict[key] = st.text_input(key, value="None")
+                empty_dict[key] = st.text_input(key, value=empty_dict[key])
+        return empty_dict 
 
     def upload_to_database(self, details):
         values = [value.replace('"', '') for value in details.values()]
         worksheet.append_row(values)
         try:
             supabase.table("Invoices").insert({
+                "invoice_date": details['invoice_date'],
+                "user_id": st.session_state.user_id,
                 "invoice_id": details['invoice_number'],
                 "invoice_name": details['invoice_name'],
                 "invoice_company": details['invoice_company'],
                 "invoice_no": details['invoice_number'],
-                "total_amount": int(details['total_amount']),
-                "no_of_items": int(details['no_of_items'])
+                "total_amount": float(details['total_amount']),
+                "no_of_items": int(details['no_of_items']),
+                "invoices_user_id": str(st.session_state.user_id) + "_" + str(details['invoice_number'])
             }).execute()
         except APIError as e:
             if '23505' in str(e):
@@ -158,9 +166,8 @@ class gemini_model:
                 st.error('Please ensure that the total amount and no of items are integers.')
             if '22P02' in str(e):
                 st.error('Please ensure that the invoice number is an integer if no invoice number, enter 0.')
-            else:
-                st.error(f"An unexpected error occurred: {str(e)}")
-
+                
+                
 class user_interface:
     def __init__(self):
         self.username = ""
@@ -366,40 +373,37 @@ class user_interface:
 
         # Fetch all invoices from the 'Invoices' table based on the user_id
         invoices = supabase.table("Invoices").select("*").eq("user_id", user_id).execute().data
-        
-        if len(invoices)==0:
-            st.write("No Invoices Found")
-        else:
-            # Filter options
-            filter_options = ["No Filter", "No of Items Less Than", "No of Items Greater Than", "Total Amount Less Than", "Total Amount Greater Than"]
-            selected_filter = st.selectbox("Filter By", filter_options)
 
-            # If user selects a filter option
-            if selected_filter != "No Filter":
-                # Get filter input from user
-                filter_input = st.number_input(f"Enter Value to Filter {selected_filter}", min_value=0)
+        # Filter options
+        filter_options = ["No Filter", "No of Items Less Than", "No of Items Greater Than", "Total Amount Less Than", "Total Amount Greater Than"]
+        selected_filter = st.selectbox("Filter By", filter_options)
 
-                # Filter invoices based on selected option
-                if selected_filter == "No of Items Less Than":
-                    invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) < filter_input]
-                elif selected_filter == "No of Items Greater Than":
-                    invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) > filter_input]
-                elif selected_filter == "Total Amount Less Than":
-                    invoices = [invoice for invoice in invoices if int(invoice['total_amount']) < filter_input]
-                elif selected_filter == "Total Amount Greater Than":
-                    invoices = [invoice for invoice in invoices if int(invoice['total_amount']) > filter_input]
+        # If user selects a filter option
+        if selected_filter != "No Filter":
+            # Get filter input from user
+            filter_input = st.number_input(f"Enter Value to Filter {selected_filter}", min_value=0)
 
-            # Display filtered invoices
-            st.write("Filtered Invoices:")
-            for invoice in invoices:
-                st.write("Invoice ID:", invoice['invoice_id'])
-                st.write("Invoice Name:", invoice['invoice_name'])
-                st.write("Invoice Company:", invoice['invoice_company'])
-                st.write("Invoice Number:", invoice['invoice_no'])
-                st.write("Total Amount:", invoice['total_amount'])
-                st.write("No of Items:", invoice['no_of_items'])
-                st.write("Date:",invoice.get('invoice_date' ,''))
-                st.write("---------------")
+            # Filter invoices based on selected option
+            if selected_filter == "No of Items Less Than":
+                invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) < filter_input]
+            elif selected_filter == "No of Items Greater Than":
+                invoices = [invoice for invoice in invoices if int(invoice['no_of_items']) > filter_input]
+            elif selected_filter == "Total Amount Less Than":
+                invoices = [invoice for invoice in invoices if int(invoice['total_amount']) < filter_input]
+            elif selected_filter == "Total Amount Greater Than":
+                invoices = [invoice for invoice in invoices if int(invoice['total_amount']) > filter_input]
+
+        # Display filtered invoices
+        st.write("Filtered Invoices:")
+        for invoice in invoices:
+            st.write("Invoice ID:", invoice['invoice_id'])
+            st.write("Invoice Name:", invoice['invoice_name'])
+            st.write("Invoice Company:", invoice['invoice_company'])
+            st.write("Invoice Number:", invoice['invoice_no'])
+            st.write("Total Amount:", invoice['total_amount'])
+            st.write("No of Items:", invoice['no_of_items'])
+            st.write("Invoice Date:", invoice['invoice_date'])
+            st.write("---------------")
 
 
 def main():
