@@ -78,7 +78,7 @@ class gemini_model:
             raise FileNotFoundError("No file uploaded")
 
     def main_model(self):
-        input = '''give me the details of the invoice like invoice name, invoice number as a integer, invoice company, date, total amount as a integer, no of items as a integer,
+        input = '''give me the details of the invoice like invoice name, invoice number as a integer, invoice company, date in YYYY-MM-DD string format (no need for time), total amount as a integer, no of items as a integer,
         i need only these fields do not give me any extra details ok?
         if any field is not available, return them as NULL,
         i need all detials as a python dictionary  '''
@@ -139,6 +139,7 @@ class gemini_model:
         worksheet.append_row(values)
         try:
             supabase.table("Invoices").insert({
+                "invoice_date": details['date'],
                 "user_id": st.session_state.user_id,
                 "invoice_id": details['invoice_number'],
                 "invoice_name": details['invoice_name'],
@@ -319,6 +320,7 @@ class user_interface:
             st.write("Invoice Number:", invoice['invoice_no'])
             st.write("Total Amount:", invoice['total_amount'])
             st.write("No of Items:", invoice['no_of_items'])
+            st.write("Invoice Date:", invoice['invoice_date'])
             st.write("---------------")
 
 
