@@ -206,12 +206,14 @@ class user_interface:
                 st.session_state['logged_in'] = True
                 st.session_state['user_id'] = user_id  # Store the user_id in the session state
                 st.session_state.page = 'home'  # Redirect to home page after login
-                st.success("Click again to login")
+                st.success("Succesful Login")
+                st.experimental_rerun()
             else:
                 st.error("Invalid username or password.")
 
         if st.button("Register"):
             st.session_state.page = 'register'
+            st.experimental_rerun()
 
     def registration_page(self):
         st.title("Registration")
@@ -244,9 +246,11 @@ class user_interface:
 
                 st.success("Registration successful! Click login button to login ")
                 st.session_state.page = 'login'
+                st.experimental_rerun()
 
         if back_to_login_button:
             st.session_state.page = 'login'
+            st.experimental_rerun()
 
     def fetch_user_profile(self, user_id):
         try:
@@ -447,6 +451,7 @@ def main():
             if selected == "Logout":
                 st.session_state.logged_in = False
                 st.session_state.page = 'login'
+                st.experimental_rerun()
 
         if st.session_state.page == 'home':
             ui.home_page()
