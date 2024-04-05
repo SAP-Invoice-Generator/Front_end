@@ -203,7 +203,7 @@ class user_interface:
                 st.session_state['logged_in'] = True
                 st.session_state['user_id'] = user_id  # Store the user_id in the session state
                 st.session_state.page = 'home'  # Redirect to home page after login
-                st.success("Login successful!")
+                st.success("Click again to login")
             else:
                 st.error("Invalid username or password.")
 
@@ -238,11 +238,9 @@ class user_interface:
                     "address": address
                 }).execute()
                 
-                if response.error:
-                    st.error("An error occurred during registration. Please try again.")
-                else:
-                    st.success("Registration successful! You will be redirected to the login page shortly.")
-                    st.session_state.page = 'login'
+
+                st.success("Registration successful! Click login button to login ")
+                st.session_state.page = 'login'
 
         if back_to_login_button:
             st.session_state.page = 'login'
