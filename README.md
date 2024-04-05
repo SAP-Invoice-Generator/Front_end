@@ -57,6 +57,7 @@ streamlit run app.py
 2. View Results: Once uploaded, the extracted invoice details will be displayed on the interface.
 3. Analyze Data: Utilize the analytics section to view month-wise and year-wise expenditure analysis.
 4. Edit and Store: Edit any extracted details if necessary and submit to store the data in the backend database.
+The Invoice Management Tool is hosted at [https://sap-project-beta.streamlit.app/](https://sap-project-beta.streamlit.app/). You can access it directly in your web browser to start managing your invoices.
 
 ## Contributing
 
