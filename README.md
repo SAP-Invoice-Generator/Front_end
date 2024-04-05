@@ -13,10 +13,9 @@ The Invoice Management Tool is a web application designed to streamline the proc
 
 ## Technologies Used
 
-- **Frontend**: Streamlit, HTML, CSS
+- **Frontend**: Streamlit
 - **Backend**: Python, Supabase (PostgreSQL)
 - **AI**: Gemini API, PyPDF, Google Sheets (for certain functionalities)
-- **Cloud Services**: AWS S3 (for storage), AWS Textract (for image and PDF processing)
 
 ## Installation
 
