@@ -109,10 +109,10 @@ class gemini_model:
             st.subheader("The Response is")
             response = response.replace("python", "")
             details = self.extract_invoice_details(response)
-            self.display_invoice_fields(details)
+            updated_details=self.display_invoice_fields(details)
 
             if st.button("Submit"):
-                self.upload_to_database(details)
+                self.upload_to_database(updated_details)
                 st.write("Successfully uploaded")
 
     def extract_invoice_details(self, response):
@@ -133,6 +133,7 @@ class gemini_model:
         # Ensure 'invoice_date' key exists, otherwise set it to today's date
         if 'invoice_date' not in response_dict:
             response_dict['invoice_date'] = date.today().strftime("%Y-%m-%d")
+        print(response_dict)
         return response_dict
 
 
@@ -140,20 +141,22 @@ class gemini_model:
         fake = Faker()
 
         st.write(details)
-        empty_dict={"invoice_name": fake.name(), "invoice_number": random.randint(1000000,9999999), "invoice_company": fake.company(), "invoice_date": date.today().strftime("%Y-%m-%d"), "total_amount": 1, "no_of_items": 1}
+        empty_dict={"invoice_name": fake.name(), "invoice_number": random.randint(1000000,9999999), "invoice_company": fake.company(), "date": date.today().strftime("%Y-%m-%d"), "total_amount": 1, "no_of_items": 1}
         for key, value in empty_dict.items():
-            if details.get(key) is not None:
+            if details.get(key) is not None and details[key] != "NULL" and details[key] != "null" and details[key] != "None" and details[key] != "none" and details[key] != "none" and details[key] != "":
                 empty_dict[key] = st.text_input(key, value=details[key])
             else:
                 empty_dict[key] = st.text_input(key, value=empty_dict[key])
+        print("empty_dict=",empty_dict)
         return empty_dict 
 
     def upload_to_database(self, details):
+        print("details=",details)
         values = [value.replace('"', '') for value in details.values()]
         worksheet.append_row(values)
         try:
             supabase.table("Invoices").insert({
-                "invoice_date": details['invoice_date'],
+                "invoice_date": details['date'],
                 "user_id": st.session_state.user_id,
                 "invoice_id": details['invoice_number'],
                 "invoice_name": details['invoice_name'],
